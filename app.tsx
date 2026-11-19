@@ -1,5 +1,5 @@
 import { definePluginApp, experimental_useRpcQuery, useBbNavigate, useRpc, useSdk } from "@get-bb/plugin-sdk/app";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { settingsContract, type TerminalAction } from "./contract.ts";
 import "./perch-settings.css";
 
@@ -10,12 +10,37 @@ function PerchAccount({ terminalPanel = false }: { terminalPanel?: boolean }) {
   const sdk = useSdk();
   const [opening, setOpening] = useState<TerminalAction>();
   const [notice, setNotice] = useState<string>();
+  // Sign-in finishes in a separate terminal, so re-check Perch until it reports
+  // signed in (or five minutes pass) instead of showing the status from before.
+  const [watchUntil, setWatchUntil] = useState(0);
+  const refetch = account.refetch;
+  const signedIn = account.data?.signedIn;
+
+  useEffect(() => {
+    if (!watchUntil || signedIn) return;
+    const timer = setInterval(() => {
+      if (Date.now() > watchUntil) setWatchUntil(0);
+      else void refetch();
+    }, 4_000);
+    return () => clearInterval(timer);
+  }, [watchUntil, signedIn, refetch]);
+
+  useEffect(() => {
+    const onFocus = () => { if (document.visibilityState === "visible") void refetch(); };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+    };
+  }, [refetch]);
 
   async function open(action: TerminalAction) {
     setOpening(action);
     setNotice(undefined);
     try {
       const { terminalId } = await rpc.call("openTerminal", { action });
+      if (action === "login" || action === "interactive" || action === "shell") setWatchUntil(Date.now() + 5 * 60_000);
       if (!await navigate.experimental_openTerminal({ terminalId })) {
         await sdk.terminals.close({ terminalId, mode: "force" });
         setNotice("Could not reveal the Perch terminal. Try again from this panel.");
@@ -37,7 +62,7 @@ function PerchAccount({ terminalPanel = false }: { terminalPanel?: boolean }) {
     <div className="perch-account-row">
       <p role="status">
         {account.data
-          ? <><strong>{account.data.signedIn ? "Signed in" : "Signed out"}</strong>
+          ? <><strong>{account.data.signedIn ? "Signed in" : watchUntil ? "Waiting for sign-in…" : "Signed out"}</strong>
             {" · "}{account.data.machine}{account.data.version && ` · Perch ${account.data.version}`}</>
           : account.error
             ? "Perch status is unavailable. Check the executable on the primary machine."
