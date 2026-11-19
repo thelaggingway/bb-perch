@@ -6,8 +6,10 @@ export const loginCommand = "perch login";
 
 export function runPerch(
   args: string[],
-  { cwd, input, signal, env, executable = "perch", captureStderr = false }: {
+  { cwd, input, signal, env, executable = "perch", captureStderr = false, doneWhen }: {
     cwd?: string; input?: string; signal: AbortSignal; env?: NodeJS.ProcessEnv; executable?: string; captureStderr?: boolean;
+    /** Resolve early and stop Perch once stdout so far satisfies this check. */
+    doneWhen?: (stdout: string) => boolean;
   },
 ): Promise<{ code: number; stdout: string; stderr?: string }> {
   signal.throwIfAborted();
@@ -37,6 +39,14 @@ export function runPerch(
         return;
       }
       chunks.push(chunk);
+      if (doneWhen && chunks === stdout) {
+        const text = Buffer.concat(stdout).toString("utf8");
+        if (doneWhen(text)) {
+          signal.removeEventListener("abort", abort);
+          stop();
+          resolve({ code: 0, stdout: text });
+        }
+      }
     };
     child.stdout!.on("data", append(stdout));
     child.stderr?.on("data", append(stderr));

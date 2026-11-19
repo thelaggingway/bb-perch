@@ -1,5 +1,6 @@
 import { cliCommand, defineCli, PluginCliError, type BbPluginApi, type PluginCliContext } from "@get-bb/plugin-sdk";
-import { hostContract, settingsContract, type PerchCommand, type TerminalAction } from "./contract.ts";
+import { hostContract, settingsContract, usageSourceContract, type PerchCommand, type TerminalAction } from "./contract.ts";
+import type { PerchUsage } from "./usage.ts";
 import { chatModes, configured, efforts, modelCatalog, permissions, personas, reasoning } from "./options.ts";
 import { keys, readDefaults, readLaunch, settingsDescriptors } from "./settings.ts";
 import { terminalSpec } from "./terminals.ts";
@@ -33,7 +34,7 @@ export default async function perchPlugin(bb: BbPluginApi) {
       installUrl: "https://www.perchai.app/docs/using-perch/cli",
       planModeCopy: "Perch starts in read-only planning mode.",
     },
-    maintenance: { health: true, installation: true },
+    maintenance: { health: true, installation: true, usage: true },
     capabilities: {
       supportsServiceTier: false,
       supportsNativeUserQuestion: false,
@@ -102,6 +103,65 @@ export default async function perchPlugin(bb: BbPluginApi) {
     return { terminalId: terminal.id };
   }
 
+  // Feeds bb's Provider usage settings page and its optional sidebar card.
+  const usageCache = new Map<string, { at: number; observedAt: number | null; value: PerchUsage }>();
+  async function hostUsage(hostId: string, refresh: boolean) {
+    const cached = usageCache.get(hostId);
+    if (cached && !refresh && Date.now() - cached.at < 60_000) return cached;
+    let value: PerchUsage;
+    try {
+      const result = await execute({ kind: "usage" }, {}, hostId);
+      value = result.stdout && result.exitCode === 0
+        ? JSON.parse(result.stdout)
+        : { status: "error", message: "Perch usage is unavailable." };
+    } catch {
+      value = { status: "error", message: "Usage could not be collected from this machine." };
+    }
+    const entry = { at: Date.now(), observedAt: value.status === "ok" ? Date.now() : cached?.observedAt ?? null, value };
+    usageCache.set(hostId, entry);
+    return entry;
+  }
+  bb.rpc.register(usageSourceContract, {
+    async "provider-usage.v1.listResources"() {
+      const hosts = await bb.sdk.hosts.list();
+      const resources = await Promise.all(hosts.map(async (host) => {
+        const providers = await bb.sdk.providers.list({ hostId: host.id, capability: "usage" }).catch(() => []);
+        return providers.some((provider) => provider.id === providerId)
+          ? [{
+            id: JSON.stringify([host.id, providerId]), accountKey: null, providerId, label: "Perch",
+            scope: { kind: "host" as const, hostId: host.id, hostName: host.name },
+          }]
+          : [];
+      }));
+      return { resources: resources.flat() };
+    },
+    async "provider-usage.v1.getResource"({ resourceId, refresh }) {
+      const [hostId, id] = JSON.parse(resourceId) as [string, string];
+      if (id !== providerId || typeof hostId !== "string") throw new Error("Unknown Perch usage resource.");
+      const { observedAt, value } = await hostUsage(hostId, refresh);
+      const base = { accountEmail: null, planLabel: value.status === "ok" ? value.planLabel : null };
+      const usage = value.status === "ok"
+        ? {
+          status: "ok" as const, ...base,
+          windows: value.windows.map((window, index) => ({
+            kind: /5h$/.test(window.label) ? "five-hour" as const : /weekly$/i.test(window.label) ? "weekly" as const : "custom" as const,
+            id: `${index}:${window.label}`,
+            label: window.label,
+            usedPercent: window.usedPercent,
+            resetsAt: window.resetsAt,
+            // Names the pool (Roost or Manual) that a rolling window belongs to.
+            model: window.label.includes(" · ") ? window.label.split(" · ")[0] : null,
+            cost: window.cost ?? null,
+          })),
+        }
+        : value.status === "error" ? { ...value, ...base } : { status: value.status, ...base };
+      return { accountKey: null, observedAt, usage };
+    },
+  }, {
+    experimental_discoverable: true,
+    experimental_description: "Perch plan usage on each machine, read with perch run /usage. Inventory reads metadata only.",
+  });
+
   bb.rpc.register(settingsContract, {
     async accountStatus() {
       const { hostId } = await target({});
@@ -110,6 +170,12 @@ export default async function perchPlugin(bb: BbPluginApi) {
       if (!result.stdout || result.exitCode !== 0) throw new Error("Perch status is unavailable.");
       const { version, signedIn } = JSON.parse(result.stdout);
       return { machine: machine.name, version, signedIn };
+    },
+    async accountUsage() {
+      const { hostId } = await target({});
+      const result = await execute({ kind: "usage" }, {}, hostId);
+      if (!result.stdout || result.exitCode !== 0) throw new Error("Perch usage is unavailable.");
+      return JSON.parse(result.stdout);
     },
     async setDefaultModels({ model, subagent }) {
       // experimental_set validates each value against the descriptor schema.
@@ -163,6 +229,11 @@ export default async function perchPlugin(bb: BbPluginApi) {
         options: targetOptions,
         run: ({ positionals, options: { host, cwd } }, ctx) =>
           execute({ kind: "skills", name: positionals.name, cwd: cwd ?? (host ? undefined : ctx.cwd) }, ctx, host),
+      }),
+      usage: cliCommand({
+        summary: "Show Perch plan usage windows on the execution machine",
+        options: { host: targetOptions.host },
+        run: ({ options: { host } }, ctx) => execute({ kind: "usage" }, ctx, host),
       }),
       catalog: cliCommand({
         summary: "Report named models advertised by the installed CLI and the bb ACP snapshot",

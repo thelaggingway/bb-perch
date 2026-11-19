@@ -101,6 +101,25 @@ account entitlements and model-specific effort mapping. The picker uses a
 versioned catalog. Perch manages account-specific visibility, promotions,
 BYOK, BYOLM, and subscription models in its own client.
 
+## Usage
+
+Perch plan usage appears in three places:
+
+- **Settings → Perch → Usage**: every Perch meter (Roost and Manual pools with
+  their 5-hour and weekly windows, the Manual allowance in dollars, bonus
+  pools) and this month's activity, with a refresh button.
+- **Settings → Provider usage** and the sidebar's **Provider usage** card:
+  Perch is listed next to the other providers.
+- **`bb perch usage`** prints the same data as JSON.
+
+The plugin reads usage by running Perch's own `/usage` command
+(`perch run /usage --json`) in a private temporary folder. Perch answers it
+from the account meter without a model call, and the plugin never reads
+Perch's credentials. Results are cached for a minute.
+
+Perch's ACP turns report no token counts, so bb's per-thread context meter
+stays empty for Perch threads.
+
 ## One-off tasks
 
 ```sh
@@ -110,6 +129,7 @@ bb perch run 'Condense that to one sentence.' --thread <perch-thread-id>
 bb perch skills
 bb perch skills <name>
 bb perch status
+bb perch usage
 bb perch catalog
 ```
 
@@ -126,10 +146,10 @@ default to bb's primary machine. `--host` selects a machine explicitly, and
 ## Current limits
 
 Perch ACP exposes stream events, permission requests, and session load. Native
-fork, compaction, interactive terminal slash commands, and subscription usage
-windows have no compatible ACP operation in the tested CLI. Open a Perch
-terminal for `/usage`, BYOK/BYOLM/subscription management, and other
-interactive settings. `bb perch catalog` probes argument validation for the installed CLI’s public
+fork, compaction, interactive terminal slash commands, and per-turn token
+usage have no compatible ACP operation in the tested CLI. Plan usage is read
+separately (see [Usage](#usage)). Open a Perch terminal for
+BYOK/BYOLM/subscription management and other interactive settings. `bb perch catalog` probes argument validation for the installed CLI’s public
 named-model list without sending a prompt and falls back to the bundled list
 if that output changes. The diagnostic omits account-gated entries and does
 not return stable ACP pin IDs. The ACP picker uses the bundled snapshot.

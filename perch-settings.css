@@ -80,3 +80,50 @@
   color: var(--foreground);
   font-size: 0.875rem;
 }
+
+.perch-usage {
+  display: grid;
+  gap: 0.5rem;
+  margin-block-start: 1rem;
+  padding-block-start: 0.75rem;
+  border-block-start: 1px solid var(--border);
+  font-size: 0.875rem;
+}
+.perch-usage h3 {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.perch-usage ul {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.perch-usage-label {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.perch-usage-label span:last-child,
+.perch-usage small {
+  color: var(--muted-foreground);
+}
+.perch-usage meter {
+  width: 100%;
+  height: 0.5rem;
+}
+.perch-usage button {
+  min-height: 2rem;
+  padding: 0.25rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  background: var(--background);
+  color: var(--foreground);
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+.perch-usage button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}

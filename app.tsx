@@ -95,6 +95,45 @@ function PerchAccount({ terminalPanel = false }: { terminalPanel?: boolean }) {
   </div>;
 }
 
+function resetLabel(iso: string | null) {
+  if (!iso) return null;
+  const minutes = Math.max(0, Math.round((Date.parse(iso) - Date.now()) / 60_000));
+  const days = Math.floor(minutes / 1440);
+  const hours = Math.floor((minutes % 1440) / 60);
+  return `resets in ${days ? `${days}d ` : ""}${hours || !days ? `${hours}h` : ""}`.trim();
+}
+
+function PerchUsage() {
+  const usage = experimental_useRpcQuery({ contract: settingsContract, method: "accountUsage", input: null });
+  const data = usage.data;
+  return <section className="perch-usage" aria-label="Perch usage">
+    <div className="perch-account-row">
+      <h3>Usage{data?.status === "ok" && data.planLabel ? ` · ${data.planLabel} plan` : ""}</h3>
+      <button type="button" disabled={usage.isFetching} onClick={() => void usage.refetch()}>
+        {usage.isFetching ? "Refreshing…" : "Refresh usage"}
+      </button>
+    </div>
+    {!data && <p>{usage.error ? "Perch usage is unavailable." : "Reading Perch usage…"}</p>}
+    {data?.status === "unauthenticated" && <p>Sign in to Perch to see usage.</p>}
+    {data?.status === "not_installed" && <p>Perch is not installed on the primary machine.</p>}
+    {data?.status === "error" && <p>{data.message}</p>}
+    {data?.status === "ok" && <ul>
+      {data.windows.map((window) => <li key={window.label}>
+        <div className="perch-usage-label">
+          <span>{window.label}</span>
+          <span>{[
+            window.cost && `$${(window.cost.usedUsdCents / 100).toFixed(2)} / $${(window.cost.limitUsdCents / 100).toFixed(0)}`,
+            window.usedPercent > 0 && window.usedPercent < 1 ? "<1%" : `${Math.round(window.usedPercent)}%`,
+            resetLabel(window.resetsAt),
+          ].filter(Boolean).join(" · ")}</span>
+        </div>
+        <meter min={0} max={100} low={70} high={90} optimum={0} value={window.usedPercent} title={window.detail} />
+      </li>)}
+    </ul>}
+    {data?.status === "ok" && data.activity && <small>{data.activity}</small>}
+  </section>;
+}
+
 const roostTiers = [
   ["standard", "Roost Standard"],
   ["standard-max", "Roost Standard 1M"],
@@ -154,7 +193,7 @@ function DefaultModels() {
 }
 
 function PerchAccountSettings() {
-  return <><PerchAccount /><DefaultModels /></>;
+  return <><PerchAccount /><PerchUsage /><DefaultModels /></>;
 }
 
 function PerchTerminals() {

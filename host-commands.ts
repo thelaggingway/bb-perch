@@ -8,6 +8,7 @@ import { launchEnvironment, readDefaults, readLaunch } from "./settings.ts";
 import { type Options } from "./options.ts";
 import { exactModels } from "./exact-models.ts";
 import { catalogFromUsageError } from "./catalog.ts";
+import { readPerchUsage } from "./usage.ts";
 
 const limit = 48_000;
 function bounded(text: string) {
@@ -45,6 +46,9 @@ export async function executeCommand(command: PerchCommand, signal: AbortSignal)
       exitCode: 0,
       stdout: JSON.stringify({ ...status, ...(status.signedIn ? {} : { loginCommand }) }),
     };
+  }
+  if (command.kind === "usage") {
+    return { exitCode: 0, stdout: JSON.stringify(await readPerchUsage(launch, signal)) };
   }
   if (command.kind === "catalog") {
     let names: string[] | undefined;

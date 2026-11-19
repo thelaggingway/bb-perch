@@ -39,6 +39,18 @@ contract.
   returns a bounded projection and supplies a fresh thread ID by default so the
   native cwd-derived default cannot append to an interactive chat.
 
+- `perch run /usage --json` answers locally from the account meter (no model
+  call, `Calls: 0`) in about a second, but the process lingers for about 20
+  seconds afterwards. `usage.ts` stops it once the JSON is complete and sets
+  `NODE_OPTIONS=--max-old-space-size` so the `perch` launcher does not re-exec
+  into a child that would survive the kill. ACP `session/prompt` returns only
+  `stopReason` and Perch never sends `usage_update`.
+- bb 0.49's Provider usage page discovers sources implementing
+  `provider-usage.v1.listResources` / `getResource` (not exported by SDK
+  0.6.132; `contract.ts` mirrors the built-in shape). The provider also needs
+  `maintenance.usage: true`. Window `model` names the pool so bb labels
+  windows "Weekly · Roost" instead of repeating "Weekly limit".
+
 ## Implementation and invariants
 
 - The provider adapter uses the published bb ACP provider bridge for the native

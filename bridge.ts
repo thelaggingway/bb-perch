@@ -25,6 +25,7 @@ import { modelCatalog, resolveSettings } from "./options.ts";
 import { executableEnv, settingsEnv } from "./proxy.ts";
 import { launchEnvironment, readDefaults, readLaunch, type LaunchOptions } from "./settings.ts";
 import { installCommand, loginCommand, readStatus } from "./process.ts";
+import { readPerchUsageCached } from "./usage.ts";
 
 experimental_registerAcpDialect({
   id: "perch",
@@ -32,7 +33,19 @@ experimental_registerAcpDialect({
     loginCommand,
     installer: () => ({ command: "npm", args: ["install", "-g", "perchai-cli"], displayCommand: installCommand }),
     readAccount: async () => (await readStatus()).signedIn ? { email: null } : null,
-    readUsage: async () => ({ supported: false }),
+    readUsage: async () => {
+      const usage = await readPerchUsageCached();
+      if (usage.status === "error") return { supported: true, usage: { ...usage, accountEmail: null, planLabel: null } };
+      if (usage.status !== "ok") return { supported: true, usage };
+      const { planLabel, windows } = usage;
+      return {
+        supported: true,
+        usage: {
+          status: "ok", accountEmail: null, planLabel,
+          windows: windows.map(({ label, usedPercent, resetsAt, cost }) => ({ label, usedPercent, resetsAt, ...(cost ? { cost } : {}) })),
+        },
+      };
+    },
   },
 });
 
