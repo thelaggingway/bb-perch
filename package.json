@@ -1,0 +1,36 @@
+{
+  "name": "bb-plugin-perch",
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "bb": ">=0.49",
+    "bbPluginSdk": ">=0.6.132",
+    "node": ">=22.18"
+  },
+  "bb": {
+    "name": "Perch",
+    "description": "Run Perch as a BB agent with per-thread models, effort, and permissions.",
+    "branding": {
+      "icon": "Bird"
+    },
+    "server": "./server.ts",
+    "host": "./host.ts",
+    "skills": [
+      "skills"
+    ]
+  },
+  "dependencies": {
+    "@get-bb/plugin-sdk": "0.6.132",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^4.1.12"
+  },
+  "license": "MIT",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  }
+}
