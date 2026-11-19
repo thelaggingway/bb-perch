@@ -53,7 +53,7 @@ test("one-off runs use stdin and argv, and report bounded structured output", as
   assert.deepEqual(JSON.parse(payload.assistantText), {
     input: task, cwd: workspace,
     args: ["-", "--json", "--thread", "cli-42", "--model", "standard 1m",
-      "--effort", "off", "--permission", "plan", "--skill", "x", "--skill", "y",
+      "--effort", "off", "--permission", "plan", "--mode", "agents", "--persona", "saffron", "--skill", "x", "--skill", "y",
       "--attach", join(workspace, "some file.pdf")],
   });
   assert.equal(payload.threadId, "cli-42");
@@ -88,11 +88,18 @@ test("model and effort changes reopen the original native session and forward at
   writeFileSync(image, "test image");
   const harness = createHarness(bridge.handleLine);
   const threadId = "thr_perch_options";
+  const alternate = join(workspace, "custom-perch");
+  symlinkSync(fileURLToPath(new URL("fake-perch.mjs", import.meta.url)), alternate);
   const first = {
-    model: "gemini-4-hydrogen",
-    reasoningLevel: "none",
+    model: "configured",
+    reasoningLevel: "configured",
+    providerOptions: { perchSettings: {
+      defaultModel: "gemini-4-hydrogen", defaultEffort: "none",
+      defaultPersona: "quill", defaultChat: "ask", defaultLocalTools: "off",
+      executable: alternate, gitAttribution: "off", cliHistory: "off", language: "ja",
+    } },
     permissionMode: "auto", approvalReviewer: "automatic", permissionScope: "workspace", permissionEscalation: "ask",
-    sessionOptions: { persona: "quill", chat: "ask", localTools: "off" },
+    sessionOptions: { persona: "configured" },
   };
   const second = {
     ...first,
@@ -153,6 +160,9 @@ test("model and effort changes reopen the original native session and forward at
       version: 1, roostChoice: "standard", manualModelOptionId: "gemini-gemini-4-hydrogen",
       subagentModelOptionId: null, effort: { level: "off", orchestration: false },
       permissionMode: "auto_review", chatMode: "ask", personaId: "quill", cliLocalTools: false,
+    });
+    assert.deepEqual(initial.payload.env, {
+      PERCH_LANG: "ja", PERCH_GIT_ATTRIBUTION: "off", PERCH_CLI_HISTORY: "0",
     });
     const changed = await turn(second);
     assert.equal(changed.payload.config.manualModelOptionId, "openrouter-z-ai-glm-5-3-flash-crusoe-pro");

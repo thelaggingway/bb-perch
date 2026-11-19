@@ -26,3 +26,14 @@ sub-agent model, local tools or orchestration effort from the thread options.
 Use `bb thread options <bb-thread-id> --set <id>=<value>` to change one for the
 next turn. A model or effort remains subject to Perch account and adapter
 support. Queue a new turn to change settings during a running turn.
+
+Use `bb plugin config perch` to inspect defaults. **Plugin default**
+(`configured` in bb) follows the current setting. Explicit model, effort,
+and thread options take precedence. `bb perch run` follows the defaults
+for its native flags. Sub-agent model and orchestration effort apply to ACP
+threads. Use `--local-tools on|off` to override the one-shot preference.
+
+`bb perch catalog` reports installed CLI names and the bundled ACP snapshot.
+Sign-in, updates, and model-routing status are available in Settings → Perch
+through explicit terminal actions. Keep credential values out of plugin
+settings and command arguments.

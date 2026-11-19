@@ -10,6 +10,7 @@ import {
 import { perchConfiguration } from "./options.ts";
 
 export const settingsEnv = "BB_PERCH_SESSION_SETTINGS";
+export const executableEnv = "BB_PERCH_SESSION_EXECUTABLE";
 
 export function runPerchProxy() {
   const { file, configOptions } = perchConfiguration(JSON.parse(process.env[settingsEnv] ?? "{}"));
@@ -18,11 +19,13 @@ export function runPerchProxy() {
   process.once("exit", cleanup);
   writeFileSync(join(directory, "cli-settings.json"), JSON.stringify(file), { mode: 0o600 });
 
-  const env = { ...process.env, PERCH_CLI_SETTINGS_DIR: directory };
-  delete (env as NodeJS.ProcessEnv)[settingsEnv];
+  const env: NodeJS.ProcessEnv = { ...process.env, PERCH_CLI_SETTINGS_DIR: directory };
+  const executable = env[executableEnv] ?? "perch";
+  delete env[settingsEnv];
+  delete env[executableEnv];
 
   const child = experimental_spawnPortableProcess({
-    command: "perch", args: ["acp"],
+    command: executable, args: ["acp"],
     env,
     stdio: ["pipe", "pipe", "ignore"],
   });
@@ -123,7 +126,7 @@ export function runPerchProxy() {
   child.stdin!.on("error", () => {});
   child.once("error", (error: NodeJS.ErrnoException) => {
     process.stderr.write(error.code === "ENOENT"
-      ? "Perch is missing from PATH. Install it with npm install -g perchai-cli.\n"
+      ? "The Perch executable was not found. Check the Perch plugin settings on this machine.\n"
       : "Could not launch perch acp.\n");
   });
   child.once("close", (code) => {

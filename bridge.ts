@@ -4,9 +4,12 @@ import {
   experimental_defineProviderBridge,
   isRecord,
   initializeParamsSchema,
+  experimental_resolveExecutablePath,
+  providerMaintenanceParamsSchema,
   PROVIDER_BRIDGE_PROTOCOL_VERSION,
   THREAD_DELTA_GRAMMAR_V3,
   type InitializeResult,
+  type ProviderHealthResult,
   modelListParamsSchema,
   threadResumeParamsSchema,
   threadStartParamsSchema,
@@ -19,7 +22,8 @@ import {
   experimental_registerAcpDialect,
 } from "@get-bb/plugin-sdk/provider-bridge/acp";
 import { modelCatalog, resolveSettings } from "./options.ts";
-import { settingsEnv } from "./proxy.ts";
+import { executableEnv, settingsEnv } from "./proxy.ts";
+import { launchEnvironment, readDefaults, readLaunch, type LaunchOptions } from "./settings.ts";
 import { installCommand, loginCommand, readStatus } from "./process.ts";
 
 experimental_registerAcpDialect({
@@ -51,7 +55,9 @@ function acpOptions(
   threadId: string,
   startsTurn: boolean,
 ): BridgeExecutionOptions {
-  const settings = resolveSettings(options);
+  const raw = isRecord(options.providerOptions?.perchSettings) ? options.providerOptions.perchSettings : {};
+  const settings = resolveSettings(options, readDefaults(raw));
+  const perch = readLaunch(raw);
   const planning = settings.plan || settings.selections.mode === "plan" || settings.selections.chat === "plan";
   const planGeneration = planning ? planGenerations.get(threadId) ?? 0 : undefined;
   // Perch can leave Plan after an approval. Each subsequent planning turn
@@ -69,12 +75,38 @@ function acpOptions(
   };
   return {
     ...options,
+    model: settings.selections.model,
+    reasoningLevel: settings.selections.effort,
     permissionMode: "accept-edits",
     permissionScope: "workspace",
     approvalReviewer: "user",
     permissionEscalation: options.permissionEscalation ?? "ask",
-    envVars: { ...options.envVars, [settingsEnv]: JSON.stringify({ ...settings, planGeneration }) },
+    envVars: {
+      ...options.envVars,
+      ...launchEnvironment(perch),
+      [executableEnv]: perch.executable,
+      [settingsEnv]: JSON.stringify({ ...settings, planGeneration }),
+    },
     providerOptions: { ...options.providerOptions, ...bridgeOptions, acpLaunchSpec: launch },
+  };
+}
+
+async function customExecutableHealth(launch: LaunchOptions, cwd?: string): Promise<ProviderHealthResult> {
+  const installed = await experimental_resolveExecutablePath(launch.executable) !== null;
+  const status = installed ? await readStatus(cwd, undefined, launch).catch(() => undefined) : undefined;
+  return {
+    supported: true,
+    health: {
+      status: !installed ? "not_installed" : !status ? "unknown" : status.signedIn ? "ready" : "unauthenticated",
+      statusMessage: !installed ? "The configured Perch executable was not found." : null,
+      installedVersion: status?.version ?? null,
+      accountEmail: null,
+      planLabel: null,
+      minimumSupportedVersion: null,
+      canInstall: false,
+      canUpdate: false,
+      loginCommand: null,
+    },
   };
 }
 
@@ -154,7 +186,28 @@ export const experimental_providerBridge = experimental_defineProviderBridge({
       }
       if (message.method.startsWith("provider/")) {
         const params = isRecord(message.params) ? message.params : {};
-        acp.handleLine(JSON.stringify({ ...message, params: { ...params, providerOptions: bridgeOptions } }));
+        const raw = isRecord(params.providerOptions) && isRecord(params.providerOptions.perchMaintenance)
+          ? params.providerOptions.perchMaintenance : {};
+        const launch = readLaunch(raw);
+        const command = launch.executable;
+        if (message.method === "provider/health" && command !== "perch") {
+          const parsed = providerMaintenanceParamsSchema.safeParse(params);
+          if (!parsed.success) {
+            io.sendError(message.id, -32602, "Invalid provider health parameters.");
+            return;
+          }
+          const id = message.id;
+          void customExecutableHealth(launch, parsed.data.cwd).then(
+            (result) => io.sendResult(id, result),
+            () => io.sendError(id, -32603, "Could not check the configured Perch executable."),
+          );
+          return;
+        }
+        const providerOptions = command === "perch" ? bridgeOptions : {
+          acpDialect: "acp",
+          acpLaunchSpec: { ...bridgeOptions.acpLaunchSpec, command },
+        };
+        acp.handleLine(JSON.stringify({ ...message, params: { ...params, providerOptions } }));
         return;
       }
       acp.handleLine(JSON.stringify(message));

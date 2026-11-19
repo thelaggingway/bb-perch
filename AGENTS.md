@@ -70,6 +70,41 @@ contract.
   process output and the returned answer. Native history and authorization are
   owned by Perch.
 
+## Plugin settings
+
+- Declare defaults with `bb.settings.define`. bb resolves its catalog/project
+  defaults before the bridge receives settings. Offer the explicit
+  `configured` value as the catalog default for model, effort, and session
+  selections. The adapter resolves it against the current plugin settings and
+  sends the actual model and effort to the generic ACP bridge. Keep matching
+  selector values in the proxy metadata so resets are round-trippable.
+- `deriveProviderOptions` supplies a fresh settings snapshot on every
+  dispatch. Treat remembered project selections as explicit. A settings change
+  applies to a running thread at its next regular turn if it uses that default.
+- The one-shot parser `QRa` handles model, effort, permission, chat mode,
+  persona, and `--no-local-tools`. The `domain === "run"` dispatcher builds its
+  own effort object with `orchestration: false` and never calls the sub-agent
+  model setter `dOe` or loads ACP settings via `lQt`. Keep these two defaults
+  scoped to ACP.
+- The executable default is `perch`. Accept an absolute path for host-specific
+  installs and pass commands as argv. The installed CLI recognizes
+  `PERCH_GIT_ATTRIBUTION=off`, checks `PERCH_CLI_HISTORY !== "0"` in the
+  terminal’s history read/write functions, and checks `PERCH_LANG` before
+  locale inference. Status and catalog parsing use English. Generic provider
+  maintenance has static bridge options and takes a reload for executable
+  changes.
+- The settings section links to a plugin panel with bb’s terminal surface.
+  Its buttons use a validated RPC action enum to open explicit PTY sessions for login, update, routing status, and interactive Perch. Node
+  passes separate executable, environment, and argument values in the Linux
+  and macOS terminal runner. The user handles credential changes in their
+  terminal or account UI.
+- An unrecognized `perch run --model` with empty stdin fails during argument
+  validation and prints public names from `RGe()`. `bb perch catalog` returns
+  those names separately from the ACP snapshot. The installed cache checked
+  here contained a code index (`schema`, `parser`, `files`, `parsed`, and
+  `configs`), with no model catalog. The diagnostic has neither account-
+  specific visibility nor ACP IDs, and we use no private authenticated API.
+
 ## Verification
 
 ```sh
@@ -99,3 +134,10 @@ repeated the prior reply under that same native ID.
 The two initial processes had Off and High in their separate settings files.
 The reasoning deltas corroborate a change in behavior. They do not measure
 the upstream model's exact effort budget.
+
+Settings revision live check, 2026-11-19. With `defaultModel=gemini-4-hydrogen`
+and `defaultChat=ask`, bb thread `thr_mvyup243kw` dispatched with model and
+effort both set to `configured`. Perch thread `cli-1795070807792` replied
+`OK` and saved Gemini 4 Hydrogen and Ask in its context. The browser showed
+the saved default, sign-in and version. The local-model status action opened a
+visible bb terminal. The native catalog diagnostic returned 39 public names.

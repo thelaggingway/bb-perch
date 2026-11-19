@@ -32,12 +32,45 @@ custom ACP entry, you can remove it with
 remove just the Perch entry from the Custom agents setting. Existing
 `acp-perch` threads keep that provider ID.
 
+## Perch settings
+
+Open **Settings → Perch** or run `bb plugin config perch`. The settings
+include defaults for model, effort, permission, chat mode, persona, sub-agent
+model, local tools, and orchestration effort.
+
+```sh
+bb plugin config perch set defaultModel gemini-4-hydrogen
+bb plugin config perch set defaultEffort none
+bb plugin config perch set defaultChat ask
+bb plugin config perch unset defaultModel
+```
+
+Choose **Plugin default** in bb to follow the saved setting. An explicit
+thread or project choice still takes precedence. bb may remember the last
+choice for a project. To select the default explicitly from the CLI, pass
+`--model configured --reasoning-level configured`, or set a thread option to
+`configured` to resume following its default.
+
+The executable can be `perch` from PATH or an absolute path on the execution
+machine. Git attribution, interactive terminal prompt history, and CLI
+language map to `PERCH_GIT_ATTRIBUTION`, `PERCH_CLI_HISTORY`, and `PERCH_LANG`.
+The account panel and CLI commands use the saved executable immediately.
+Reload the plugin after changing the executable to refresh bb’s generic
+provider health and installation checks. Terminal environment overrides are
+supported on Linux and macOS.
+
+The **Perch account** block reports sign-in and CLI version on bb’s primary
+machine. Choose **Open Perch terminals** to access sign-in, update, and
+account-routing actions in a panel with a visible bb terminal. Use **Open routing shell** for configuration
+changes, or manage credentials in Perch’s own account interface. Plugin
+settings contain no API keys.
+
 ## Thread controls
 
 | bb control | Perch behavior |
 | --- | --- |
 | Model | Four Roost tiers and the named models from the Perch 2.4.138 picker catalog. |
-| Reasoning | Off, Low, Medium, High, Extra high, Max, and Ultra. The CLI ID for Off in bb is `none`. |
+| Reasoning | Off, Low, Medium, High, Extra high, Max, and Ultra. The CLI ID for Off in bb is `none`. Use `configured` for Plugin default. |
 | bb permission | Accept Edits → Default, Auto → Auto Review, Full → Take the Wheel. Perch handles tool policy and bb shows approvals it still requests. |
 | Perch permission | `mode` overrides the bb mapping. It offers Default, Auto Review, Take the Wheel, and read-only Plan. |
 | Chat mode | `chat` selects Ask, Agents, or Plan. bb's Plan action starts the turn with both chat and permission set to Plan. |
@@ -74,11 +107,15 @@ bb perch run 'Condense that to one sentence.' --thread <perch-thread-id>
 bb perch skills
 bb perch skills <name>
 bb perch status
+bb perch catalog
 ```
 
 `run` returns bounded JSON with the answer, the Perch thread ID, the model, and
 per-turn token usage when available. Each call starts a fresh native thread unless you supply `--thread`. Use the
-returned `threadId` for continuations. Run `bb perch run --help` for all options. Inside a bb
+returned `threadId` for continuations. Model, effort, permission, chat mode,
+persona, and local tools inherit the plugin settings and accept CLI overrides.
+Sub-agent model and orchestration effort apply to ACP threads because
+`perch run` has no corresponding arguments. Run `bb perch run --help` for all options. Inside a bb
 thread, commands default to its execution machine. Outside a thread, commands
 default to bb's primary machine. `--host` selects a machine explicitly, and
 `--cwd` takes an absolute path on that machine.
@@ -89,8 +126,10 @@ Perch ACP exposes stream events, permission requests, and session load. Native
 fork, compaction, interactive terminal slash commands, and subscription usage
 windows have no compatible ACP operation in the tested CLI. Open a Perch
 terminal for `/usage`, BYOK/BYOLM/subscription management, and other
-interactive settings. The exact-model picker is a snapshot because Perch
-doesn't expose a supported headless catalog command.
+interactive settings. `bb perch catalog` probes argument validation for the installed CLI’s public
+named-model list without sending a prompt and falls back to the bundled list
+if that output changes. The diagnostic omits account-gated entries and does
+not return stable ACP pin IDs. The ACP picker uses the bundled snapshot.
 
 See [AGENTS.md](AGENTS.md) for protocol findings, test commands, and live
 verification.

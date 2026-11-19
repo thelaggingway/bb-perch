@@ -60,7 +60,9 @@ if (command === "--version") {
       case "session/prompt": {
         writeFileSync(join(process.env.FAKE_PERCH_STATE, params.sessionId), "");
         const answer = (decision) => {
-          const text = JSON.stringify({ config, configPath,
+          const env = Object.fromEntries(["PERCH_LANG", "PERCH_GIT_ATTRIBUTION", "PERCH_CLI_HISTORY"]
+            .map((key) => [key, process.env[key]]));
+          const text = JSON.stringify({ config, configPath, env,
             contentTypes: params.prompt.map(({ type }) => type), decision });
           update({ sessionUpdate: "agent_message_chunk", content: { type: "text", text } });
           reply({ stopReason: "end_turn" });

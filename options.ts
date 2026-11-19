@@ -29,7 +29,8 @@ export const permissions = ["default", "auto_review", "take_the_wheel", "plan"] 
 export const chatModes = ["ask", "agents", "plan"] as const;
 export const personas = ["saffron", "quill"] as const;
 
-const defaults = {
+export const configured = "configured";
+export const defaults = {
   model: "standard",
   effort: "high",
   mode: "inherit",
@@ -43,7 +44,7 @@ const defaults = {
 const names = (values: readonly string[]) =>
   values.map((value) => ({ value, name: value[0].toUpperCase() + value.slice(1) }));
 
-const selections = [
+export const selections = [
   { id: "model", name: "Model", category: "model", options: modelNames },
   { id: "effort", name: "Effort", category: "thought_level", options: reasoning.map(([value, name]) => ({ value, name })) },
   { id: "mode", name: "Perch permission", options: [
@@ -64,11 +65,12 @@ const selections = [
 ] as const;
 
 type OptionId = keyof typeof defaults;
-type Options = Record<OptionId, string>;
+export type Options = Record<OptionId, string>;
 const runOptions = z.object({
   selections: z.record(z.string(), z.string()),
   permission: z.enum(permissions),
   plan: z.boolean(),
+  useDefaults: z.array(z.string()).default([]),
 });
 
 export function resolveSettings(input: {
@@ -77,20 +79,22 @@ export function resolveSettings(input: {
   permissionMode?: string;
   promptMode?: string;
   sessionOptions?: Record<string, unknown>;
-}) {
+}, fallback: Options = { ...defaults }) {
   const requested = { ...input.sessionOptions, model: input.model, effort: input.reasoningLevel };
-  const settings: Options = { ...defaults };
+  const settings: Options = { ...fallback };
+  const useDefaults: string[] = [];
   for (const { id, options } of selections) {
     const selection = (requested as Record<string, unknown>)[id];
     if (options.some((option) => option.value === selection)) settings[id] = selection as string;
+    else if (id !== "model" && id !== "effort") useDefaults.push(id);
   }
   const permission = input.permissionMode === "full" ? "take_the_wheel"
     : input.permissionMode === "auto" ? "auto_review" : "default";
-  return { selections: settings, permission, plan: input.promptMode === "plan" };
+  return { selections: settings, permission, plan: input.promptMode === "plan", useDefaults };
 }
 
 export function perchConfiguration(input: unknown) {
-  const { selections: requested, permission, plan } = runOptions.parse(input);
+  const { selections: requested, permission, plan, useDefaults } = runOptions.parse(input);
   const options = { ...defaults, ...requested } as Options;
   const effort = options.effort === "none" ? "off" : options.effort;
   return {
@@ -106,27 +110,33 @@ export function perchConfiguration(input: unknown) {
       cliLocalTools: options.localTools === "on",
     },
     configOptions: selections.map(({ options: values, ...option }) => ({
-      ...option, type: "select", currentValue: options[option.id], options: values,
+      ...option,
+      type: "select",
+      currentValue: useDefaults.includes(option.id) ? configured : options[option.id],
+      options: "category" in option ? values : [configuredChoice, ...values],
     })),
   };
 }
 
+const configuredChoice = { value: configured, name: "Plugin default" };
+
 const sessionOptions = selections.filter((option) => !("category" in option))
   .map(({ id, name, options }) => ({
-    id, label: name, type: "select" as const, value: defaults[id],
-    values: options.map(({ value, name }) => ({ id: value, label: name })),
+    id, label: name, type: "select" as const, value: configured,
+    values: [configuredChoice, ...options].map(({ value, name }) => ({ id: value, label: name })),
   }));
 
-export const modelCatalog: AvailableModel[] = modelNames.map(({ value, name }) => ({
+export const modelCatalog: AvailableModel[] = [configuredChoice, ...modelNames].map(({ value, name }) => ({
   id: value,
   model: value,
-  isDefault: value === "standard",
+  isDefault: value === configured,
   displayName: name,
-  description: exact.has(value) ? `Perch ${exact.get(value)![3]} catalog` : "Perch Roost routing",
+  description: value === configured ? "Use the configured Perch model"
+    : exact.has(value) ? `Perch ${exact.get(value)![3]} catalog` : "Perch Roost routing",
   reasoningDiscovery: "known" as const,
-  supportedReasoningEfforts: reasoning.map(([reasoningEffort, label]) => ({
+  supportedReasoningEfforts: [[configured, "Plugin default"], ...reasoning].map(([reasoningEffort, label]) => ({
     reasoningEffort, label, description: label,
   })),
-  defaultReasoningEffort: "high",
+  defaultReasoningEffort: configured,
   sessionOptions,
 }));

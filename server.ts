@@ -1,6 +1,8 @@
 import { cliCommand, defineCli, PluginCliError, type BbPluginApi, type PluginCliContext } from "@get-bb/plugin-sdk";
-import { hostContract, type PerchCommand } from "./contract.ts";
-import { chatModes, efforts, modelCatalog, permissions, personas, reasoning } from "./options.ts";
+import { hostContract, settingsContract, type PerchCommand, type TerminalAction } from "./contract.ts";
+import { chatModes, configured, efforts, modelCatalog, permissions, personas, reasoning } from "./options.ts";
+import { readLaunch, settingsDescriptors } from "./settings.ts";
+import { terminalSpec } from "./terminals.ts";
 
 const providerId = "perch";
 const targetOptions = {
@@ -8,14 +10,26 @@ const targetOptions = {
   cwd: { type: "string", description: "Absolute working directory on the execution machine" },
 } as const;
 
-export default function perchPlugin(bb: BbPluginApi) {
+export default async function perchPlugin(bb: BbPluginApi) {
+  const settings = bb.settings.define(settingsDescriptors);
+  const initialLaunch = readLaunch(await settings.get());
   bb.providers.register({
     id: providerId,
     displayName: "Perch",
     icon: "Bird",
+    experimental_bridgeOptions: { perchMaintenance: initialLaunch },
+    deriveProviderOptions: ({ settings }) => {
+      // Only declared, non-secret values are forwarded. BB supplies a fresh
+      // settings snapshot for each turn and excludes secret settings.
+      return {
+        perchSettings: Object.fromEntries(
+          Object.entries(settings).filter(([key, value]) => Object.hasOwn(settingsDescriptors, key) && typeof value === "string"),
+        ) as Record<string, string>,
+      };
+    },
     strings: {
-      signInHint: "Run perch login in a bb terminal on the execution machine.",
-      expiredHint: "Run perch login in a bb terminal on the execution machine.",
+      signInHint: "Run bb perch login on the execution machine.",
+      expiredHint: "Run bb perch login on the execution machine.",
       installUrl: "https://www.perchai.app/docs/using-perch/cli",
       planModeCopy: "Perch starts in read-only planning mode.",
     },
@@ -30,12 +44,10 @@ export default function perchPlugin(bb: BbPluginApi) {
       permissionModes: ["accept-edits", "auto", "full"],
       reasoningLevels: reasoning.map(([id]) => id),
     },
-    reasoningLevels: reasoning.map(([id, label]) => ({ id, label })),
+    reasoningLevels: [{ id: configured, label: "Plugin default" }, ...reasoning.map(([id, label]) => ({ id, label }))],
     composerActions: ["plan"],
     models: {
-      fallback: modelCatalog.slice(0, 4).map((model) => ({
-        ...model, description: "Perch Roost routing",
-      })),
+      fallback: modelCatalog.slice(0, 5),
       scope: "host",
     },
     experimental_nativeSkillRoots: {
@@ -68,12 +80,43 @@ export default function perchPlugin(bb: BbPluginApi) {
 
   async function execute(command: PerchCommand, ctx: PluginCliContext, host?: string) {
     const { hostId } = await target(ctx, host);
-    return worker.call("command", command, {
+    return worker.call("command", { ...command, runtimeSettings: await settings.get() }, {
       hostId,
       signal: ctx.signal,
       timeoutMs: command.kind === "run" ? 15 * 60_000 : 30_000,
     });
   }
+
+  async function openTerminal(action: TerminalAction, ctx: PluginCliContext, host?: string, cwd?: string) {
+    const { hostId, environmentId } = await target(ctx, host);
+    const platform = await worker.call("platform", null, { hostId, signal: ctx.signal });
+    const launch = readLaunch(await settings.get());
+    const terminal = await bb.sdk.terminals.create({
+      rows: 30,
+      cols: 100,
+      scope: environmentId && !cwd
+        ? { kind: "environment", environmentId }
+        : { kind: "host_path", hostId, cwd: cwd ?? (host ? null : ctx.cwd ?? null) },
+      ...terminalSpec(action, launch, platform === "win32"),
+    });
+    return { terminalId: terminal.id };
+  }
+
+  bb.rpc.register(settingsContract, {
+    async accountStatus() {
+      const { hostId } = await target({});
+      const machine = await bb.sdk.hosts.get({ hostId });
+      const result = await execute({ kind: "status" }, {}, hostId);
+      if (!result.stdout || result.exitCode !== 0) throw new Error("Perch status is unavailable.");
+      const { version, signedIn } = JSON.parse(result.stdout);
+      return { machine: machine.name, version, signedIn };
+    },
+    openTerminal: ({ action }) => openTerminal(action, {}),
+  });
+
+  settings.onChange((next, previous) => {
+    if (next.executable !== previous.executable) bb.rpc.experimental_invalidate(["perch-account"]);
+  });
 
   bb.cli.register(defineCli({
     name: providerId,
@@ -90,11 +133,12 @@ export default function perchPlugin(bb: BbPluginApi) {
           permission: { type: "enum", values: permissions, description: "Perch permission mode" },
           mode: { type: "enum", values: chatModes, description: "Perch chat mode" },
           persona: { type: "enum", values: personas, description: "Perch persona" },
+          "local-tools": { type: "enum", values: ["on", "off"], description: "Enable or disable Perch local tools" },
           skill: { type: "string", repeatable: true, description: "Load a Perch skill ID" },
           attach: { type: "string", repeatable: true, description: "Attach a file on the execution machine" },
         },
-        run: ({ positionals, options: { host, cwd, ...options } }, ctx) =>
-          execute({ kind: "run", task: positionals.task, cwd: cwd ?? (host ? undefined : ctx.cwd), ...options }, ctx, host),
+        run: ({ positionals, options: { host, cwd, "local-tools": localTools, ...options } }, ctx) =>
+          execute({ kind: "run", task: positionals.task, cwd: cwd ?? (host ? undefined : ctx.cwd), localTools, ...options }, ctx, host),
       }),
       status: cliCommand({
         summary: "Check Perch version and sign-in on the execution machine",
@@ -109,21 +153,17 @@ export default function perchPlugin(bb: BbPluginApi) {
         run: ({ positionals, options: { host, cwd } }, ctx) =>
           execute({ kind: "skills", name: positionals.name, cwd: cwd ?? (host ? undefined : ctx.cwd) }, ctx, host),
       }),
+      catalog: cliCommand({
+        summary: "Report named models advertised by the installed CLI and the bb ACP snapshot",
+        options: targetOptions,
+        run: ({ options: { host, cwd } }, ctx) =>
+          execute({ kind: "catalog", cwd: cwd ?? (host ? undefined : ctx.cwd) }, ctx, host),
+      }),
       login: cliCommand({
         summary: "Open perch login in a bb terminal",
         options: targetOptions,
         async run({ options: { host, cwd } }, ctx) {
-          const { hostId, environmentId } = await target(ctx, host);
-          const terminal = await bb.sdk.terminals.create({
-            rows: 30,
-            cols: 100,
-            scope: environmentId && !cwd
-              ? { kind: "environment", environmentId }
-              : { kind: "host_path", hostId, cwd: cwd ?? (host ? null : ctx.cwd ?? null) },
-            title: "Perch login",
-            start: { mode: "argv", argv: ["perch", "login"] },
-          });
-          return { exitCode: 0, stdout: JSON.stringify({ terminalId: terminal.id }) };
+          return { exitCode: 0, stdout: JSON.stringify(await openTerminal("login", ctx, host, cwd)) };
         },
       }),
     },

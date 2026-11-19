@@ -8,10 +8,12 @@
       "node"
     ],
     "noEmit": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "jsx": "react-jsx"
   },
   "include": [
     "*.ts",
-    "test/*.ts"
+    "test/*.ts",
+    "*.tsx"
   ]
 }
