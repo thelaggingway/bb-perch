@@ -93,14 +93,8 @@ export function resolveSettings(input: {
   return { selections: settings, permission, plan: input.promptMode === "plan", useDefaults };
 }
 
-// bb stacks thread options as chips under the model list, and a 47-chip
-// sub-agent block squeezes the model list to nothing. Threads get a short list
-// of fast worker models; "Plugin default" uses the full picker in Settings.
-export const threadSubagentShortlist = new Set([
-  "inherit", "deepseek-flash-starter", "deepseek-v4.1-flash-1017", "glm-5.3-flash",
-  "claude-haiku-5.5", "gemini-4-hydrogen",
-]);
 // Only these options appear per thread; the rest follow Settings → Perch.
+// bb stacks option chips under the model list in a popover that cannot scroll.
 export const threadOptionIds = new Set(["persona", "subagent"]);
 
 export function perchConfiguration(input: unknown) {
@@ -121,24 +115,31 @@ export function perchConfiguration(input: unknown) {
     },
     configOptions: selections.filter((option) => "category" in option || threadOptionIds.has(option.id)).map(({ options: values, ...option }) => ({
       ...option,
+      // Same footer dropdown as new threads; see sessionOptions below.
+      ...(option.id === "subagent" ? { category: "mode" } : {}),
       type: "select",
       currentValue: useDefaults.includes(option.id) ? configured : options[option.id],
-      options: "category" in option ? values : [configuredChoice, ...(option.id === "subagent"
-        ? values.filter(({ value }) => threadSubagentShortlist.has(value) || value === options.subagent)
-        : values)],
+      options: "category" in option ? values : [configuredChoice, ...values].map((value) => option.id === "subagent"
+        ? { ...value, name: `Sub-agent: ${value.name}` } : value),
     })),
   };
 }
 
 const configuredChoice = { value: configured, name: "Plugin default" };
 
+// bb renders options with category "mode" as a separate footer dropdown next
+// to the model picker, which fits the full sub-agent list. The footer button
+// shows only the selected label, so those labels carry a "Sub-agent:" prefix.
 const sessionOptions = selections.filter((option) => !("category" in option) && threadOptionIds.has(option.id))
-  .map(({ id, name, options }) => ({
-    id, label: name, type: "select" as const, value: configured,
-    values: [configuredChoice, ...(id === "subagent"
-      ? options.filter(({ value }) => threadSubagentShortlist.has(value)) : options)]
-      .map(({ value, name }) => ({ id: value, label: name })),
-  }));
+  .map(({ id, name, options }) => id === "subagent"
+    ? {
+      id, label: name, type: "select" as const, value: configured, category: "mode",
+      values: [configuredChoice, ...options].map(({ value, name }) => ({ id: value, label: `Sub-agent: ${name}` })),
+    }
+    : {
+      id, label: name, type: "select" as const, value: configured,
+      values: [configuredChoice, ...options].map(({ value, name }) => ({ id: value, label: name })),
+    });
 
 export const modelCatalog: AvailableModel[] = [configuredChoice, ...modelNames].map(({ value, name }) => ({
   id: value,

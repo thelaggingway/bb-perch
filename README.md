@@ -73,12 +73,13 @@ settings contain no API keys.
 | Reasoning | Off, Low, Medium, High, Extra high, Max, and Ultra. The CLI ID for Off in bb is `none`. Use `configured` for Plugin default. |
 | bb permission | Accept Edits → Default, Auto → Auto Review, Full → Take the Wheel. Perch handles tool policy and bb shows approvals it still requests. |
 | Persona | `persona` selects Saffron or Quill. |
-| Sub-agent model | `subagent` offers Plugin default, Inherit main model, and a short list of fast worker models. Pick any other model as the default in Settings → Perch. |
+| Sub-agent model | `subagent` appears as its own **Sub-agent:** dropdown beside the model picker, with every named model, Inherit main model, and Plugin default. |
 | Settings only | Perch permission, chat mode, local tools, and orchestration effort follow Settings → Perch. bb's Plan action still starts a read-only Plan turn. Set Default Perch permission to **Use bb permission** to drive it from bb's permission picker. |
 
 bb stacks thread options under the model list in one popover that does not
-scroll as a whole, so the picker shows only persona and sub-agent model. More
-options squeeze the model list out of view.
+scroll as a whole, so the picker shows only reasoning and persona there. More
+options squeeze the model list out of view. The sub-agent list uses bb's
+separate footer dropdown, which scrolls.
 
 ```sh
 bb provider models perch
