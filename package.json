@@ -11,7 +11,7 @@
     "name": "Perch",
     "description": "Run Perch as a BB agent with per-thread models, effort, and permissions.",
     "branding": {
-      "icon": "Bird"
+      "icon": "./perch.svg"
     },
     "server": "./server.ts",
     "host": "./host.ts",
