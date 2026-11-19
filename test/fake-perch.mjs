@@ -8,7 +8,21 @@ const [, , command, ...args] = process.argv;
 if (command === "--version") {
   console.log("2.4.138");
 } else if (command === "status") {
-  console.log("Perch CLI 2.4.138 · Signed in");
+  // FAKE_PERCH_AUTH: "expired" (status says signed out until /usage refreshes) or "signed-out".
+  const auth = process.env.FAKE_PERCH_AUTH;
+  const refreshed = existsSync(join(process.env.FAKE_PERCH_STATE ?? ".", "refreshed"));
+  if (auth === "signed-out" || (auth === "expired" && !refreshed)) {
+    console.log("Perch CLI 2.4.138 · Not signed in. Run `perch login`.");
+    process.exitCode = 2;
+  } else console.log("Perch CLI 2.4.138 · Signed in");
+} else if (command === "run" && args[0] === "/usage") {
+  if (process.env.FAKE_PERCH_AUTH === "signed-out") {
+    console.log("Not signed in. Run `perch login`.");
+  } else {
+    if (process.env.FAKE_PERCH_AUTH === "expired") writeFileSync(join(process.env.FAKE_PERCH_STATE ?? ".", "refreshed"), "");
+    console.log(JSON.stringify({ ok: true, status: "completed",
+      assistantText: "Perch Tokens\n- Plan: Pro · Roost: Unlimited · Manual: 75,000 PT (up to $75 API usage)" }));
+  }
 } else if (command === "skills") {
   console.log(args[0] ?? "sample-skill");
 } else if (command === "run") {

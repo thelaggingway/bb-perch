@@ -45,6 +45,10 @@ contract.
   `NODE_OPTIONS=--max-old-space-size` so the `perch` launcher does not re-exec
   into a child that would survive the kill. ACP `session/prompt` returns only
   `stopReason` and Perch never sends `usage_update`.
+- `perch status` (checked on 2.4.140) prints "Not signed in" and exits 2
+  whenever the stored access token has expired, because it never refreshes
+  it. `perch run` and the interactive terminal do refresh it. `readStatus`
+  therefore lets a `/usage` run decide before reporting signed out.
 - bb 0.49's Provider usage page discovers sources implementing
   `provider-usage.v1.listResources` / `getResource` (not exported by SDK
   0.6.132; `contract.ts` mirrors the built-in shape). The provider also needs

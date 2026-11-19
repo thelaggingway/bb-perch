@@ -1,4 +1,5 @@
 import { launchEnvironment, readLaunch, type LaunchOptions } from "./settings.ts";
+import { readPerchUsageCached } from "./usage.ts";
 import { experimental_killPortableProcess, experimental_spawnPortableProcess } from "@get-bb/plugin-sdk/provider-bridge";
 
 export const installCommand = "npm install -g perchai-cli";
@@ -84,7 +85,11 @@ export async function readStatus(
   const version = stdout.match(/Perch CLI (\d+\.\d+\.\d+(?:[-+][\w.-]+)?)/i)?.[1] ?? null;
   // The status line can contain an account email and app URL. Never return either.
   if (/\b(?:not signed in|signed out|sign in with|perch login)\b/i.test(stdout)) {
-    return { version, signedIn: false };
+    // `perch status` reports "Not signed in" once the short-lived access token
+    // has expired, because it never refreshes it. A local /usage run does
+    // refresh it (no model call), so let that decide.
+    const usage = await readPerchUsageCached(launch).catch(() => undefined);
+    return { version, signedIn: usage?.status === "ok" };
   }
   if (/\bSigned in\b/i.test(stdout) && code === 0) return { version, signedIn: true };
   throw new Error("Perch did not return a recognized sign-in status.");

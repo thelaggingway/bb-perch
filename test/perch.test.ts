@@ -68,6 +68,21 @@ test("one-off runs use stdin and argv, and report bounded structured output", as
   assert.equal((await executeCommand({ kind: "skills", cwd: workspace, name: "one-skill" }, signal)).stdout?.trim(), "one-skill");
 });
 
+test("an expired access token is refreshed before reporting sign-in", { timeout: 30_000 }, async () => {
+  const signal = AbortSignal.timeout(25_000);
+  const status = async () => JSON.parse((await executeCommand({ kind: "status", cwd: workspace }, signal)).stdout!);
+  try {
+    // Signed out for real: the /usage check fails too. (Failures are not cached.)
+    process.env.FAKE_PERCH_AUTH = "signed-out";
+    assert.deepEqual(await status(), { version: "2.4.138", signedIn: false, loginCommand: "perch login" });
+    // `perch status` says signed out only because the token expired.
+    process.env.FAKE_PERCH_AUTH = "expired";
+    assert.deepEqual(await status(), { version: "2.4.138", signedIn: true });
+  } finally {
+    delete process.env.FAKE_PERCH_AUTH;
+  }
+});
+
 test("provider bridge passes the SDK protocol conformance suite", { timeout: 20_000 }, async () => {
   const harness = createHarness(bridge.handleLine);
   try {
