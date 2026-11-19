@@ -1,6 +1,6 @@
 import { expect, test } from "vitest";
 import { configured, modelCatalog, perchConfiguration, resolveSettings } from "../options.ts";
-import { launchEnvironment, readDefaults, readLaunch } from "../settings.ts";
+import { launchEnvironment, readDefaults, readLaunch, settingsDescriptors } from "../settings.ts";
 import { buildRunArgs } from "../host-commands.ts";
 
 test("catalog defaults leave model, effort and options under plugin control", () => {
@@ -70,4 +70,18 @@ test("account actions use fixed terminal argv and keep credentials out of settin
     .toEqual(["/opt/Perch CLI/perch", '{"PERCH_CLI_HISTORY":"0"}', "byok", "status"]);
   expect(terminalSpec("update", readLaunch(), false).start.argv?.at(-1)).toBe("update");
   expect(terminalSpec("shell", launch, false).start).toEqual({ mode: "shell" });
+});
+
+type Field = { type: string; experimental_schema?: { safeParse(value: string): { success: boolean } } };
+const fields = settingsDescriptors as unknown as Record<string, Field>;
+
+test("long model lists are validated text settings, not bb dropdowns", () => {
+  for (const key of ["defaultModel", "defaultSubagent"]) {
+    expect(fields[key]!.type).toBe("string");
+    expect(fields[key]!.experimental_schema!.safeParse("glm-5.3-flash").success).toBe(true);
+    expect(fields[key]!.experimental_schema!.safeParse("not-a-model").success).toBe(false);
+  }
+  expect(fields.defaultModel!.experimental_schema!.safeParse("pro-max").success).toBe(true);
+  expect(fields.defaultSubagent!.experimental_schema!.safeParse("pro-max").success).toBe(false);
+  expect(fields.defaultEffort!.type).toBe("select");
 });

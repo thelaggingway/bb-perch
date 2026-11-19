@@ -1,7 +1,7 @@
 import { cliCommand, defineCli, PluginCliError, type BbPluginApi, type PluginCliContext } from "@get-bb/plugin-sdk";
 import { hostContract, settingsContract, type PerchCommand, type TerminalAction } from "./contract.ts";
 import { chatModes, configured, efforts, modelCatalog, permissions, personas, reasoning } from "./options.ts";
-import { readLaunch, settingsDescriptors } from "./settings.ts";
+import { keys, readDefaults, readLaunch, settingsDescriptors } from "./settings.ts";
 import { terminalSpec } from "./terminals.ts";
 
 const providerId = "perch";
@@ -110,6 +110,17 @@ export default async function perchPlugin(bb: BbPluginApi) {
       if (!result.stdout || result.exitCode !== 0) throw new Error("Perch status is unavailable.");
       const { version, signedIn } = JSON.parse(result.stdout);
       return { machine: machine.name, version, signedIn };
+    },
+    async setDefaultModels({ model, subagent }) {
+      // experimental_set validates each value against the descriptor schema.
+      // The descriptors are built with Object.fromEntries, so their keys are not
+      // literal types; the runtime still validates every value.
+      const update: Record<string, string> = {};
+      if (model !== undefined) update[keys.model] = model;
+      if (subagent !== undefined) update[keys.subagent] = subagent;
+      const next = await settings.experimental_set(update as Parameters<typeof settings.experimental_set>[0]);
+      const values = readDefaults(next);
+      return { model: values.model, subagent: values.subagent };
     },
     openTerminal: ({ action }) => openTerminal(action, {}),
   });

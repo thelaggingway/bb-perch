@@ -46,6 +46,10 @@ export const settingsContract = defineRpcContract({
     tags: () => ["perch-account"],
     output: z.object({ machine: z.string(), version: z.string().nullable(), signedIn: z.boolean() }),
   },
+  setDefaultModels: {
+    input: z.object({ model: z.string().max(200).optional(), subagent: z.string().max(200).optional() }).strict(),
+    output: z.object({ model: z.string(), subagent: z.string() }),
+  },
   openTerminal: {
     input: z.object({ action: z.enum(terminalActions) }).strict(),
     output: z.object({ terminalId: z.string() }),

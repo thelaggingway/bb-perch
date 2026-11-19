@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { defaults, selections, type Options } from "./options.ts";
 
-const keys = {
+export const keys = {
   model: "defaultModel",
   effort: "defaultEffort",
   mode: "defaultPermission",
@@ -43,12 +43,27 @@ const executable = z.string().max(4096).refine(
   "Enter perch or an absolute executable path.",
 );
 
+// bb's settings dropdown cannot scroll, so the two model lists (about 50
+// entries each) are plain validated text fields here. The Perch account
+// section renders scrollable pickers that write the same settings.
+export const longLists = new Set<keyof Options>(["model", "subagent"]);
+
+function modelField(id: keyof Options, label: string, values: string[]) {
+  const allowed = new Set(values);
+  return {
+    type: "string" as const, label, default: defaults[id],
+    description: `${descriptions[id] ? `${descriptions[id]} ` : ""}Pick it in the Perch account section, or enter a model ID such as claude-haiku-5.5.`,
+    experimental_schema: z.string().refine((value) => allowed.has(value), "Enter a model ID from the Perch account picker."),
+  };
+}
+
 export const settingsDescriptors = {
-  ...Object.fromEntries(selections.map(({ id, name, options }) => [
-    keys[id],
-    select(id === "mode" ? "Default Perch permission" : `Default ${name.toLowerCase()}`, Object.fromEntries(options.map(({ value, name }) => [value, name])),
-      defaults[id], descriptions[id]),
-  ])),
+  ...Object.fromEntries(selections.map(({ id, name, options }) => {
+    const label = id === "mode" ? "Default Perch permission" : `Default ${name.toLowerCase()}`;
+    return [keys[id], longLists.has(id)
+      ? modelField(id, label, options.map(({ value }) => value))
+      : select(label, Object.fromEntries(options.map(({ value, name }) => [value, name])), defaults[id], descriptions[id])];
+  })),
   executable: {
     type: "string" as const, label: "Perch executable", default: "perch",
     description: "Use perch from PATH or an absolute path on the execution machine.",
