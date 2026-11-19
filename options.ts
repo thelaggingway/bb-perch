@@ -93,6 +93,16 @@ export function resolveSettings(input: {
   return { selections: settings, permission, plan: input.promptMode === "plan", useDefaults };
 }
 
+// bb stacks thread options as chips under the model list, and a 47-chip
+// sub-agent block squeezes the model list to nothing. Threads get a short list
+// of fast worker models; "Plugin default" uses the full picker in Settings.
+export const threadSubagentShortlist = new Set([
+  "inherit", "deepseek-flash-starter", "deepseek-v4.1-flash-1017", "glm-5.3-flash",
+  "claude-haiku-5.5", "gemini-4-hydrogen",
+]);
+// Only these options appear per thread; the rest follow Settings → Perch.
+export const threadOptionIds = new Set(["persona", "subagent"]);
+
 export function perchConfiguration(input: unknown) {
   const { selections: requested, permission, plan, useDefaults } = runOptions.parse(input);
   const options = { ...defaults, ...requested } as Options;
@@ -109,21 +119,25 @@ export function perchConfiguration(input: unknown) {
       personaId: options.persona,
       cliLocalTools: options.localTools === "on",
     },
-    configOptions: selections.map(({ options: values, ...option }) => ({
+    configOptions: selections.filter((option) => "category" in option || threadOptionIds.has(option.id)).map(({ options: values, ...option }) => ({
       ...option,
       type: "select",
       currentValue: useDefaults.includes(option.id) ? configured : options[option.id],
-      options: "category" in option ? values : [configuredChoice, ...values],
+      options: "category" in option ? values : [configuredChoice, ...(option.id === "subagent"
+        ? values.filter(({ value }) => threadSubagentShortlist.has(value) || value === options.subagent)
+        : values)],
     })),
   };
 }
 
 const configuredChoice = { value: configured, name: "Plugin default" };
 
-const sessionOptions = selections.filter((option) => !("category" in option))
+const sessionOptions = selections.filter((option) => !("category" in option) && threadOptionIds.has(option.id))
   .map(({ id, name, options }) => ({
     id, label: name, type: "select" as const, value: configured,
-    values: [configuredChoice, ...options].map(({ value, name }) => ({ id: value, label: name })),
+    values: [configuredChoice, ...(id === "subagent"
+      ? options.filter(({ value }) => threadSubagentShortlist.has(value)) : options)]
+      .map(({ value, name }) => ({ id: value, label: name })),
   }));
 
 export const modelCatalog: AvailableModel[] = [configuredChoice, ...modelNames].map(({ value, name }) => ({

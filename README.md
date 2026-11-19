@@ -72,16 +72,18 @@ settings contain no API keys.
 | Model | Four Roost tiers and the named models from the Perch 2.4.138 picker catalog. |
 | Reasoning | Off, Low, Medium, High, Extra high, Max, and Ultra. The CLI ID for Off in bb is `none`. Use `configured` for Plugin default. |
 | bb permission | Accept Edits → Default, Auto → Auto Review, Full → Take the Wheel. Perch handles tool policy and bb shows approvals it still requests. |
-| Perch permission | `mode` overrides the bb mapping. It offers Default, Auto Review, Take the Wheel, and read-only Plan. |
-| Chat mode | `chat` selects Ask, Agents, or Plan. bb's Plan action starts the turn with both chat and permission set to Plan. |
 | Persona | `persona` selects Saffron or Quill. |
-| Sub-agent model | `subagent` pins a named model or inherits the main model. |
-| Local tools and orchestration effort | `localTools` and `orchestration` accept `on` and `off`. |
+| Sub-agent model | `subagent` offers Plugin default, Inherit main model, and a short list of fast worker models. Pick any other model as the default in Settings → Perch. |
+| Settings only | Perch permission, chat mode, local tools, and orchestration effort follow Settings → Perch. bb's Plan action still starts a read-only Plan turn. Set Default Perch permission to **Use bb permission** to drive it from bb's permission picker. |
+
+bb stacks thread options under the model list in one popover that does not
+scroll as a whole, so the picker shows only persona and sub-agent model. More
+options squeeze the model list out of view.
 
 ```sh
 bb provider models perch
 bb thread spawn --provider perch --model gemini-4-hydrogen \
-  --reasoning-level none --permission-mode auto --option chat=ask \
+  --reasoning-level none --permission-mode auto --option persona=saffron \
   --prompt 'Reply with OK.'
 bb thread options <bb-thread-id> --set persona=quill
 ```
